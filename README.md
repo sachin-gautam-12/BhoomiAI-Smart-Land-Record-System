@@ -287,7 +287,7 @@ The project is pre-configured for **Render** using PostgreSQL while keeping SQLi
 1. Push `main` to GitHub.
 2. In Render, create a **Blueprint** or **Web Service** from the repository — `render.yaml` provisions it automatically.
 3. Create a **PostgreSQL** database (free tier) and link it (sets `DATABASE_URL`).
-4. Build command: `./build.sh` — installs deps → `collectstatic` → `migrate` → `bootstrap_accounts`.
+4. Build command: `./build.sh` — installs deps → `collectstatic` → `migrate` → **seeds 2,400 projects** → `bootstrap_accounts`.
 5. Start command: `gunicorn bhoomiai_project.wsgi:application`.
 
 **Required environment variables**
@@ -300,22 +300,24 @@ The project is pre-configured for **Render** using PostgreSQL while keeping SQLi
 | `CSRF_TRUSTED_ORIGINS` | `https://<your-app>.onrender.com` |
 | `DATABASE_URL` | provided by the linked PostgreSQL database |
 
-### Post-deploy setup (Render Shell)
+### Automatic data setup on deploy (no Shell required)
 
-The build automatically creates the default **admin** and **demo** accounts
-(`bootstrap_accounts`). To load the **2,400-row synthetic demo workspace** into the
-live PostgreSQL database, open **Render Dashboard → your service → Shell** and run:
+`build.sh` seeds the database for you, so **no Render Shell is needed** (important on the
+free plan, which has no Shell):
 
-```bash
-python manage.py generate_synthetic_data --seed-db
-```
+- `python manage.py generate_synthetic_data --seed-db` — loads the **2,400-row synthetic
+  demo workspace** (projects + predictions) right after migrations.
+- `python manage.py bootstrap_accounts` — creates the default **admin** and **demo** accounts.
 
-This is **idempotent** — re-running it adds only missing projects, so it is safe to run
-more than once. To (re)confirm the default accounts at any time:
+Both steps are **idempotent**: seeding skips projects whose `project_id` already exists
+(first deploy imports 2,400; later deploys import 0), and account bootstrap never resets an
+existing password. So every deploy is safe and never creates duplicates.
 
-```bash
-python manage.py bootstrap_accounts
-```
+> If you ever have Shell access (paid plans), you can re-run either command manually:
+> ```bash
+> python manage.py generate_synthetic_data --seed-db
+> python manage.py bootstrap_accounts
+> ```
 
 > ML artifacts (`ml_artifacts/`) and the synthetic dataset (`data/`) are committed and loaded at runtime. Render's filesystem is ephemeral, so reports are generated on demand. **Never copy the local SQLite database to production** — run migrations on the empty PostgreSQL database.
 
